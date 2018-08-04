@@ -49,6 +49,7 @@ def __get_tiling_conv2d(
     cost_w=100,
     cost_n=10,
     cost_h=1,
+    cost_feat_in=1,
     max_tile_n_in=None,
     max_tile_n_out=None,
     min_tile_w_in=None,
@@ -57,7 +58,8 @@ def __get_tiling_conv2d(
     min_tile_h_out=None,
     ds_x=2,
     ds_y=2,
-    ds_W=2
+    ds_W=2,
+    heuristic=None
 ):
     parameters = pywrapcp.Solver.DefaultSolverParameters()
     solver = pywrapcp.Solver("simple_CP", parameters)
@@ -106,7 +108,8 @@ def __get_tiling_conv2d(
     solver.Add(obj_expr == cost_dim * (ds_x*tile_n_in*tile_h_in*tile_w_in + ds_y*tile_n_out*tile_h_out*tile_w_out + ds_W*tile_n_in*tile_n_out*fs*fs) 
                          + cost_w   * tile_w_in
                          + cost_h   * tile_h_in
-                         + cost_n   * tile_n_in )
+                         + cost_n   * tile_n_in
+                         + cost_feat_in * (tile_n_in - tile_n_out) )
     objective = solver.Maximize(obj_expr, 1)
 
     decision_builder = solver.Phase([tile_n_in, tile_n_out, tile_h_in, tile_h_out, tile_w_in, tile_w_out],
@@ -225,6 +228,7 @@ def __get_tiling_pool2d(
     cost_w=100,
     cost_n=10,
     cost_h=1,
+    cost_feat_in=1,
     max_tile_n_in=None,
     max_tile_n_out=None,
     min_tile_w_in=None,
@@ -274,7 +278,8 @@ def __get_tiling_pool2d(
     solver.Add(obj_expr == cost_dim * (ds_x*tile_n*tile_h*tile_w + ds_y*tile_n*tile_h*tile_w)
                          + cost_w   * tile_w
                          + cost_h   * tile_h
-                         + cost_n   * tile_n )
+                         + cost_n   * tile_n 
+                         + cost_feat_in * (tile_n_in - tile_n_out) )
     objective = solver.Maximize(obj_expr, 1)
 
     decision_builder = solver.Phase([tile_n, tile_h, tile_w],

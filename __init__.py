@@ -10,4 +10,4 @@
 # of the MIT license.  See the LICENSE file for details.
 #
 
-from dory import *
+__all__ = ["tiling"]

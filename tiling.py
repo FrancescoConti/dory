@@ -93,7 +93,7 @@ def __get_tiling_conv2d(
         parameters = pywrapcp.Solver.DefaultSolverParameters()
         solver = pywrapcp.Solver("simple_CP", parameters)
 
-        if heuristic == 'width_first' and iteration==0:
+        if (heuristic == 'width_first' and iteration==0) or (heuristic == 'spatial_first' and iteration==0):
             tile_n_in  = solver.IntVar(max_tile_n_in, max_tile_n_in , 'tile_n_in' )
             tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
             tile_h_in  = solver.IntVar(h_in, h_in , 'tile_h_in' )
@@ -109,7 +109,15 @@ def __get_tiling_conv2d(
             tile_w_in  = solver.IntVar(w_in, w_in , 'tile_w_in' )
             tile_w_out = solver.IntVar(w_out, w_out, 'tile_w_out')
 
-        elif heuristic == 'width_first' and iteration==2:
+        elif heuristic == 'spatial_first' and iteration==1:
+            tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+            tile_h_in  = solver.IntVar(h_in, h_in , 'tile_h_in' )
+            tile_h_out = solver.IntVar(h_out, h_out, 'tile_h_out')
+            tile_w_in  = solver.IntVar(w_in, w_in , 'tile_w_in' )
+            tile_w_out = solver.IntVar(w_out, w_out, 'tile_w_out')
+
+        elif (heuristic == 'width_first' and iteration==2) or (heuristic == 'spatial_first' and iteration==2):
             tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
             tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
             tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
@@ -133,7 +141,7 @@ def __get_tiling_conv2d(
             tile_w_in  = solver.IntVar(min_tile_w_in, w_in , 'tile_w_in' )
             tile_w_out = solver.IntVar(min_tile_w_out, w_out, 'tile_w_out')
 
-        elif heuristic is None or (heuristic == 'channel_first' and iteration >= 2) or (heuristic == 'width_first' and iteration >= 4):
+        elif (heuristic is None) or (heuristic == 'channel_first' and iteration >= 2) or (heuristic == 'width_first' and iteration >= 4):
             tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
             tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
             tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )

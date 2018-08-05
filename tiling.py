@@ -336,21 +336,25 @@ def __get_tiling_pool2d(
 
     # integer positive variables.
     tile_n     = solver.IntVar(1, max_tile_n_in     , 'tile_n' )
-    tile_h     = solver.IntVar(min_tile_h_in, h_in , 'tile_h' )
-    tile_w     = solver.IntVar(min_tile_w_in, w_in , 'tile_w' )
+    tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
+    tile_w_in  = solver.IntVar(min_tile_w_in, w_in , 'tile_w_in' )
+    tile_h_out = solver.IntVar(min_tile_h_out, h_out , 'tile_h_out' )
+    tile_w_out = solver.IntVar(min_tile_w_out, w_out , 'tile_w_out' )
 
     # constraints
-    solver.Add(ds_x*tile_n*tile_h*tile_w + ds_y*tile_n*tile_h*tile_w <= buffer_size)
+    solver.Add(ds_x*tile_n*tile_h_in*tile_w_in + ds_y*tile_n*tile_h_out*tile_w_out <= buffer_size)
+    solver.Add(tile_h_in == s * tile_h_out)
+    solver.Add(tile_w_in == s * tile_w_out)
 
     # objective
     obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
-    solver.Add(obj_expr == cost_dim * (ds_x*tile_n*tile_h*tile_w + ds_y*tile_n*tile_h*tile_w)
+    solver.Add(obj_expr == cost_dim * (ds_x*tile_n*tile_h_in*tile_w_in + ds_y*tile_n*tile_h_out*tile_w_out)
                          + cost_w   * tile_w
-                         + cost_h   * tile_h
-                         + cost_n   * tile_n )
+                         + cost_h   * tile_h_in
+                         + cost_n   * tile_n_in )
     objective = solver.Maximize(obj_expr, 1)
 
-    decision_builder = solver.Phase([tile_n, tile_h, tile_w],
+    decision_builder = solver.Phase([tile_n, tile_h_in, tile_w_in, tile_h_out, tile_w_out],
                                      solver.CHOOSE_FIRST_UNBOUND,
                                      solver.ASSIGN_MIN_VALUE)
 
@@ -358,8 +362,10 @@ def __get_tiling_pool2d(
     collector = solver.LastSolutionCollector()
     # Add the decision variables.
     collector.Add(tile_n)
-    collector.Add(tile_h)
-    collector.Add(tile_w)
+    collector.Add(tile_h_in)
+    collector.Add(tile_w_in)
+    collector.Add(tile_h_out)
+    collector.Add(tile_w_out)
     # Add the objective.
     collector.AddObjective(obj_expr)
 
@@ -368,22 +374,26 @@ def __get_tiling_pool2d(
         best_solution = collector.SolutionCount() - 1
 
         tile_n  = collector.Value(best_solution, tile_n )
-        tile_h  = collector.Value(best_solution, tile_h )
-        tile_w  = collector.Value(best_solution, tile_w )
+        tile_h_in = collector.Value(best_solution, tile_h_in )
+        tile_w_in = collector.Value(best_solution, tile_w_in )
+        tile_h_out = collector.Value(best_solution, tile_h_out )
+        tile_w_out = collector.Value(best_solution, tile_w_out )
 
-        x_tile_str = '[%dx%dx%d]' % (tile_n, tile_h, tile_w)
+        x_tile_str = '[%dx%dx%d]' % (tile_n, tile_h_in, tile_w_in)
+        y_tile_str = '[%dx%dx%d]' % (tile_n, tile_h_out, tile_w_out)
 
-        x_size_str = "%.2f KiB" % (1./1024.*(ds_x*tile_n*tile_h*tile_w)) if ds_x*tile_n*tile_h*tile_w > 1024 else '%d B' % (ds_x*tile_n*tile_h*tile_w)
-        y_size_str = "%.2f KiB" % (1./1024.*(ds_y*tile_n*tile_h*tile_w)) if ds_y*tile_n*tile_h*tile_w > 1024 else '%d B' % (ds_y*tile_n*tile_h*tile_w)
+        x_size_str = "%.2f KiB" % (1./1024.*(ds_x*tile_n*tile_h_in*tile_w_in)) if ds_x*tile_n*tile_h_in*tile_w_in > 1024 else '%d B' % (ds_x*tile_n*tile_h_in*tile_w_in)
+        y_size_str = "%.2f KiB" % (1./1024.*(ds_y*tile_n*tile_h_out*tile_w_out)) if ds_y*tile_n*tile_h_out*tile_w_out > 1024 else '%d B' % (ds_y*tile_n*tile_h_out*tile_w_out)
 
-        x_no_str = '%d' % (math.ceil(n/tile_n)*math.ceil(h/tile_h)*math.ceil(w/tile_w))
+        x_no_str = '%d' % (math.ceil(n_in/tile_n)*math.ceil(h_in/tile_h_in)*math.ceil(w_in/tile_w_in))
+        y_no_str = '%d' % (math.ceil(n_in/tile_n)*math.ceil(h_out/tile_h_out)*math.ceil(w_out/tile_w_out))
 
         print("  Pool2d tiling:")
         print("    tiles:".ljust(15) + "x: " + x_tile_str.ljust(15) + "y: " + y_tile_str.ljust(15)) 
         print("    buffers:".ljust(15) + "x: " + x_size_str.ljust(15) + "y: " + y_size_str.ljust(15)) 
         print("    no. tiles:".ljust(15) + "x: " + x_no_str.ljust(15) + "y: " + y_no_str.ljust(15)) 
 
-        return (tile_n, tile_h, tile_w)
+        return (tile_n, tile_h_in, tile_w_in, tile_h_out, tile_w_out)
     print("  Pool2d ERROR: no tiling found")
     return None
 

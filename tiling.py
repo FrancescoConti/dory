@@ -312,7 +312,7 @@ def __get_tiling_pool2d(
     solver = pywrapcp.Solver("simple_CP", parameters)
 
     s  = module.stride
-    n_in = n_out = x_shape[0]
+    n_in = n_out = x_shape[1]
     h_in  = x_shape[-2]
     w_in  = x_shape[-1]
     h_out = h_in // s
@@ -349,9 +349,9 @@ def __get_tiling_pool2d(
     # objective
     obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
     solver.Add(obj_expr == cost_dim * (ds_x*tile_n*tile_h_in*tile_w_in + ds_y*tile_n*tile_h_out*tile_w_out)
-                         + cost_w   * tile_w
+                         + cost_w   * tile_w_in
                          + cost_h   * tile_h_in
-                         + cost_n   * tile_n_in )
+                         + cost_n   * tile_n )
     objective = solver.Maximize(obj_expr, 1)
 
     decision_builder = solver.Phase([tile_n, tile_h_in, tile_w_in, tile_h_out, tile_w_out],

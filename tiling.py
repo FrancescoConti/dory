@@ -9,6 +9,7 @@
 #
 
 from __future__ import print_function
+import math
 import torch
 import torch.nn as nn
 from ortools.constraint_solver import pywrapcp
@@ -49,7 +50,7 @@ def __get_tiling_conv2d(
     cost_w=100,
     cost_n=10,
     cost_h=1,
-    cost_feat_in=1,
+    cost_feat_in=10,
     max_tile_n_in=None,
     max_tile_n_out=None,
     min_tile_w_in=None,
@@ -61,8 +62,6 @@ def __get_tiling_conv2d(
     ds_W=2,
     heuristic=None
 ):
-    parameters = pywrapcp.Solver.DefaultSolverParameters()
-    solver = pywrapcp.Solver("simple_CP", parameters)
 
     fs = module.kernel_size[0]
     s  = module.stride[0]
@@ -90,65 +89,116 @@ def __get_tiling_conv2d(
     # this is to renormalize all costs
     max_obj_value = buffer_size * cost_dim * 2
 
-    # integer positive variables.
-    tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
-    tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
-    tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
-    tile_h_out = solver.IntVar(min_tile_h_out, h_out, 'tile_h_out')
-    tile_w_in  = solver.IntVar(min_tile_w_in, w_in , 'tile_w_in' )
-    tile_w_out = solver.IntVar(min_tile_w_out, w_out, 'tile_w_out')
+    for iteration in range(0,4):
 
-    # constraints
-    solver.Add(ds_x*tile_n_in*tile_h_in*tile_w_in + ds_y*tile_n_out*tile_h_out*tile_w_out + ds_W*tile_n_in*tile_n_out*fs*fs <= buffer_size)
-    solver.Add((2*tile_h_out + (fs-1) - 2*p) * s == 2*tile_h_in)
-    solver.Add((2*tile_w_out + (fs-1) - 2*p) * s == 2*tile_w_in)
+        parameters = pywrapcp.Solver.DefaultSolverParameters()
+        solver = pywrapcp.Solver("simple_CP", parameters)
 
-    # objective
-    obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
-    solver.Add(obj_expr == cost_dim * (ds_x*tile_n_in*tile_h_in*tile_w_in + ds_y*tile_n_out*tile_h_out*tile_w_out + ds_W*tile_n_in*tile_n_out*fs*fs) 
-                         + cost_w   * tile_w_in
-                         + cost_h   * tile_h_in
-                         + cost_n   * tile_n_in
-                         + cost_feat_in * (tile_n_in - tile_n_out) )
-    objective = solver.Maximize(obj_expr, 1)
+        if heuristic == 'width_first' and iteration==0:
+            tile_n_in  = solver.IntVar(max_tile_n_in, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+            tile_h_in  = solver.IntVar(h_in, h_in , 'tile_h_in' )
+            tile_h_out = solver.IntVar(h_out, h_out, 'tile_h_out')
+            tile_w_in  = solver.IntVar(w_in, w_in , 'tile_w_in' )
+            tile_w_out = solver.IntVar(w_out, w_out, 'tile_w_out')
 
-    decision_builder = solver.Phase([tile_n_in, tile_n_out, tile_h_in, tile_h_out, tile_w_in, tile_w_out],
-                                     solver.CHOOSE_FIRST_UNBOUND,
-                                     solver.ASSIGN_MIN_VALUE)
+        elif heuristic == 'width_first' and iteration==1:
+            tile_n_in  = solver.IntVar(max_tile_n_in, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+            tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
+            tile_h_out = solver.IntVar(min_tile_h_out, h_out, 'tile_h_out')
+            tile_w_in  = solver.IntVar(w_in, w_in , 'tile_w_in' )
+            tile_w_out = solver.IntVar(w_out, w_out, 'tile_w_out')
 
-    # Create a solution collector.
-    collector = solver.LastSolutionCollector()
-    # Add the decision variables.
-    collector.Add(tile_n_in)
-    collector.Add(tile_n_out)
-    collector.Add(tile_h_in)
-    collector.Add(tile_h_out)
-    collector.Add(tile_w_in)
-    collector.Add(tile_w_out)
-    # Add the objective.
-    collector.AddObjective(obj_expr)
+        elif heuristic == 'width_first' and iteration==2:
+            tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+            tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
+            tile_h_out = solver.IntVar(min_tile_h_out, h_out, 'tile_h_out')
+            tile_w_in  = solver.IntVar(w_in, w_in , 'tile_w_in' )
+            tile_w_out = solver.IntVar(w_out, w_out, 'tile_w_out')
 
-    solver.Solve(decision_builder, [objective, collector])
-    if collector.SolutionCount() > 0:
-        best_solution = collector.SolutionCount() - 1
+        elif heuristic == 'channel_first' and iteration==0:
+            tile_n_in  = solver.IntVar(max_tile_n_in, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(max_tile_n_out, max_tile_n_out, 'tile_n_out')
+            tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
+            tile_h_out = solver.IntVar(min_tile_h_out, h_out, 'tile_h_out')
+            tile_w_in  = solver.IntVar(min_tile_w_in, w_in , 'tile_w_in' )
+            tile_w_out = solver.IntVar(min_tile_w_out, w_out, 'tile_w_out')
 
-        tile_n_in  = collector.Value(best_solution, tile_n_in )
-        tile_n_out = collector.Value(best_solution, tile_n_out)
-        tile_h_in  = collector.Value(best_solution, tile_h_in )
-        tile_h_out = collector.Value(best_solution, tile_h_out)
-        tile_w_in  = collector.Value(best_solution, tile_w_in )
-        tile_w_out = collector.Value(best_solution, tile_w_out)
+        elif heuristic == 'channel_first' and iteration==1:
+            tile_n_in  = solver.IntVar(max_tile_n_in, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+            tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
+            tile_h_out = solver.IntVar(min_tile_h_out, h_out, 'tile_h_out')
+            tile_w_in  = solver.IntVar(min_tile_w_in, w_in , 'tile_w_in' )
+            tile_w_out = solver.IntVar(min_tile_w_out, w_out, 'tile_w_out')
 
-        print("\ttiles:\t\tx[%dx%dx%d]\ty[%dx%dx%d]\tW[%dx%dx%dx%d]" % (
-            tile_n_in, tile_h_in, tile_w_in,
-            tile_n_out, tile_h_out, tile_w_out,
-            tile_n_out, tile_n_in, fs, fs
-        ))
-        print("\tbuffers:\tx:%dB\t\ty:%dB\t\tW:%dB" % (
-            ds_x*tile_n_in*tile_h_in*tile_w_in,
-            ds_y*tile_n_out*tile_h_out*tile_w_out,
-            ds_W*tile_n_out*tile_n_in*fs*fs
-        ))
+        elif heuristic is None or (heuristic == 'channel_first' and iteration >= 2) or (heuristic == 'width_first' and iteration >= 4):
+            tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+            tile_h_in  = solver.IntVar(min_tile_h_in, h_in , 'tile_h_in' )
+            tile_h_out = solver.IntVar(min_tile_h_out, h_out, 'tile_h_out')
+            tile_w_in  = solver.IntVar(min_tile_w_in, w_in , 'tile_w_in' )
+            tile_w_out = solver.IntVar(min_tile_w_out, w_out, 'tile_w_out')
+
+        # constraints
+        solver.Add(ds_x*tile_n_in*tile_h_in*tile_w_in + ds_y*tile_n_out*tile_h_out*tile_w_out + ds_W*tile_n_in*tile_n_out*fs*fs <= buffer_size)
+        solver.Add((2*tile_h_out + (fs-1) - 2*p) * s == 2*tile_h_in)
+        solver.Add((2*tile_w_out + (fs-1) - 2*p) * s == 2*tile_w_in)
+
+        # objective
+        obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
+        solver.Add(obj_expr == cost_dim * (ds_x*tile_n_in*tile_h_in*tile_w_in + ds_y*tile_n_out*tile_h_out*tile_w_out + ds_W*tile_n_in*tile_n_out*fs*fs) 
+                             + cost_w   * tile_w_in
+                             + cost_h   * tile_h_in
+                             + cost_n   * tile_n_in
+                             + cost_feat_in * (tile_n_in - tile_n_out) )
+        objective = solver.Maximize(obj_expr, 1)
+
+        decision_builder = solver.Phase([tile_n_in, tile_n_out, tile_h_in, tile_h_out, tile_w_in, tile_w_out],
+                                         solver.CHOOSE_FIRST_UNBOUND,
+                                         solver.ASSIGN_MIN_VALUE)
+
+        # Create a solution collector.
+        collector = solver.LastSolutionCollector()
+        # Add the decision variables.
+        collector.Add(tile_n_in)
+        collector.Add(tile_n_out)
+        collector.Add(tile_h_in)
+        collector.Add(tile_h_out)
+        collector.Add(tile_w_in)
+        collector.Add(tile_w_out)
+        # Add the objective.
+        collector.AddObjective(obj_expr)
+
+        solver.Solve(decision_builder, [objective, collector])
+        if collector.SolutionCount() > 0:
+            best_solution = collector.SolutionCount() - 1
+
+            tile_n_in  = collector.Value(best_solution, tile_n_in )
+            tile_n_out = collector.Value(best_solution, tile_n_out)
+            tile_h_in  = collector.Value(best_solution, tile_h_in )
+            tile_h_out = collector.Value(best_solution, tile_h_out)
+            tile_w_in  = collector.Value(best_solution, tile_w_in )
+            tile_w_out = collector.Value(best_solution, tile_w_out)
+
+            print("\ttiles:\t\tx[%dx%dx%d]\ty[%dx%dx%d]\tW[%dx%dx%dx%d]" % (
+                tile_n_in, tile_h_in, tile_w_in,
+                tile_n_out, tile_h_out, tile_w_out,
+                tile_n_out, tile_n_in, fs, fs
+            ))
+            print("\tbuffers:\tx:%dB\ty:%dB\t\tW:%dB" % (
+                ds_x*tile_n_in*tile_h_in*tile_w_in,
+                ds_y*tile_n_out*tile_h_out*tile_w_out,
+                ds_W*tile_n_out*tile_n_in*fs*fs
+            ))
+            print("\tno.tiles:\tx:%d\t\ty:%d\t\tW:%d" % (
+                math.ceil(n_in/tile_n_in)*math.ceil(h_in/tile_h_in)*math.ceil(w_in/tile_w_in),
+                math.ceil(n_out/tile_n_out)*math.ceil(h_out/tile_h_out)*math.ceil(w_out/tile_w_out),
+                math.ceil(n_out/tile_n_out)*math.ceil(n_in/tile_n_in)
+            ))
+            return (tile_n_in, tile_n_out, tile_h_in, tile_h_out, tile_w_in, tile_w_out)
 
 def __get_tiling_linear(
     module,
@@ -163,8 +213,6 @@ def __get_tiling_linear(
     ds_W=2,
     **kwargs
 ):
-    parameters = pywrapcp.Solver.DefaultSolverParameters()
-    solver = pywrapcp.Solver("simple_CP", parameters)
 
     n_in  = module.in_features
     n_out = module.out_features
@@ -177,48 +225,57 @@ def __get_tiling_linear(
     # this is to renormalize all costs
     max_obj_value = buffer_size * cost_dim * 2
 
-    # integer positive variables.
-    tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
-    tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+    for iteration in range(0,2):
 
-    # constraints
-    solver.Add(ds_x*tile_n_in + ds_y*tile_n_out + ds_W*tile_n_in*tile_n_out <= buffer_size)
+        parameters = pywrapcp.Solver.DefaultSolverParameters()
+        solver = pywrapcp.Solver("simple_CP", parameters)
 
-    # objective
-    obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
-    solver.Add(obj_expr == cost_dim * (ds_x*tile_n_in + ds_y*tile_n_out + ds_W*tile_n_in*tile_n_out) 
-                         + cost_n   * tile_n_in )
-    objective = solver.Maximize(obj_expr, 1)
+        if iteration == 0:
+            tile_n_in  = solver.IntVar(1, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
+        elif iteration == 1:
+            tile_n_in  = solver.IntVar(max_tile_n_in, max_tile_n_in , 'tile_n_in' )
+            tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
 
-    decision_builder = solver.Phase([tile_n_in, tile_n_out],
-                                     solver.CHOOSE_FIRST_UNBOUND,
-                                     solver.ASSIGN_MIN_VALUE)
+        # constraints
+        solver.Add(ds_x*tile_n_in + ds_y*tile_n_out + ds_W*tile_n_in*tile_n_out <= buffer_size)
 
-    # Create a solution collector.
-    collector = solver.LastSolutionCollector()
-    # Add the decision variables.
-    collector.Add(tile_n_in)
-    collector.Add(tile_n_out)
-    # Add the objective.
-    collector.AddObjective(obj_expr)
+        # objective
+        obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
+        solver.Add(obj_expr == cost_dim * (ds_x*tile_n_in + ds_y*tile_n_out + ds_W*tile_n_in*tile_n_out) 
+                             + cost_n   * tile_n_in )
+        objective = solver.Maximize(obj_expr, 1)
 
-    solver.Solve(decision_builder, [objective, collector])
-    if collector.SolutionCount() > 0:
-        best_solution = collector.SolutionCount() - 1
+        decision_builder = solver.Phase([tile_n_in, tile_n_out],
+                                         solver.CHOOSE_FIRST_UNBOUND,
+                                         solver.ASSIGN_MIN_VALUE)
 
-        tile_n_in  = collector.Value(best_solution, tile_n_in )
-        tile_n_out = collector.Value(best_solution, tile_n_out)
+        # Create a solution collector.
+        collector = solver.LastSolutionCollector()
+        # Add the decision variables.
+        collector.Add(tile_n_in)
+        collector.Add(tile_n_out)
+        # Add the objective.
+        collector.AddObjective(obj_expr)
 
-        print("\ttiles:\t\tx[%d]\ty[%d]\tW[%dx%d]" % (
-            tile_n_in,
-            tile_n_out,
-            tile_n_out, tile_n_in,
-        ))
-        print("\tbuffers:\tx:%dB\t\ty:%dB\t\tW:%dB" % (
-            ds_x*tile_n_in,
-            ds_y*tile_n_out,
-            ds_W*tile_n_out*tile_n_in
-        ))
+        solver.Solve(decision_builder, [objective, collector])
+        if collector.SolutionCount() > 0:
+            best_solution = collector.SolutionCount() - 1
+
+            tile_n_in  = collector.Value(best_solution, tile_n_in )
+            tile_n_out = collector.Value(best_solution, tile_n_out)
+
+            print("\ttiles:\t\tx[%d]\ty[%d]\tW[%dx%d]" % (
+                tile_n_in,
+                tile_n_out,
+                tile_n_out, tile_n_in,
+            ))
+            print("\tbuffers:\tx:%dB\t\ty:%dB\t\tW:%dB" % (
+                ds_x*tile_n_in,
+                ds_y*tile_n_out,
+                ds_W*tile_n_out*tile_n_in
+            ))
+            return (tile_n_in, tile_n_out)
 
 def __get_tiling_pool2d(
     module,
@@ -228,7 +285,7 @@ def __get_tiling_pool2d(
     cost_w=100,
     cost_n=10,
     cost_h=1,
-    cost_feat_in=1,
+    cost_feat_in=10,
     max_tile_n_in=None,
     max_tile_n_out=None,
     min_tile_w_in=None,
@@ -278,8 +335,7 @@ def __get_tiling_pool2d(
     solver.Add(obj_expr == cost_dim * (ds_x*tile_n*tile_h*tile_w + ds_y*tile_n*tile_h*tile_w)
                          + cost_w   * tile_w
                          + cost_h   * tile_h
-                         + cost_n   * tile_n 
-                         + cost_feat_in * (tile_n_in - tile_n_out) )
+                         + cost_n   * tile_n )
     objective = solver.Maximize(obj_expr, 1)
 
     decision_builder = solver.Phase([tile_n, tile_h, tile_w],
@@ -311,3 +367,5 @@ def __get_tiling_pool2d(
             tile_n*tile_h*tile_w,
             tile_n*tile_h*tile_w
         ))
+        return (tile_n, tile_h, tile_w)
+

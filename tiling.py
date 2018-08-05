@@ -183,22 +183,26 @@ def __get_tiling_conv2d(
             tile_w_in  = collector.Value(best_solution, tile_w_in )
             tile_w_out = collector.Value(best_solution, tile_w_out)
 
-            print("\ttiles:\t\tx[%dx%dx%d]\ty[%dx%dx%d]\tW[%dx%dx%dx%d]" % (
-                tile_n_in, tile_h_in, tile_w_in,
-                tile_n_out, tile_h_out, tile_w_out,
-                tile_n_out, tile_n_in, fs, fs
-            ))
-            print("\tbuffers:\tx:%dB\ty:%dB\t\tW:%dB" % (
-                ds_x*tile_n_in*tile_h_in*tile_w_in,
-                ds_y*tile_n_out*tile_h_out*tile_w_out,
-                ds_W*tile_n_out*tile_n_in*fs*fs
-            ))
-            print("\tno.tiles:\tx:%d\t\ty:%d\t\tW:%d" % (
-                math.ceil(n_in/tile_n_in)*math.ceil(h_in/tile_h_in)*math.ceil(w_in/tile_w_in),
-                math.ceil(n_out/tile_n_out)*math.ceil(h_out/tile_h_out)*math.ceil(w_out/tile_w_out),
-                math.ceil(n_out/tile_n_out)*math.ceil(n_in/tile_n_in)
-            ))
+            x_tile_str = '[%dx%dx%d]' % (tile_n_in, tile_h_in, tile_w_in)
+            y_tile_str = '[%dx%dx%d]' % (tile_n_out, tile_h_out, tile_w_out)
+            W_tile_str = '[%dx%dx%dx%d]' % (tile_n_out, tile_n_in, fs, fs)
+
+            x_size_str = "%.2f KiB" % (1./1024.*(ds_x*tile_n_in*tile_h_in*tile_w_in)) if ds_x*tile_n_in*tile_h_in*tile_w_in > 1024 else '%d B' % (ds_x*tile_n_in*tile_h_in*tile_w_in)
+            y_size_str = '%.2f KiB' % (1./1024.*(ds_y*tile_n_out*tile_h_out*tile_w_out)) if ds_y*tile_n_out*tile_h_out*tile_w_out > 1024 else '%d B' % (ds_y*tile_n_out*tile_h_out*tile_w_out)
+            W_size_str = '%.2f KiB' % (1./1024.*(ds_W*tile_n_out*tile_n_in*fs*fs)) if ds_W*tile_n_out*tile_n_in*fs*fs > 1024 else '%d B' % (ds_W*tile_n_out*tile_n_in*fs*fs)
+
+            x_no_str = '%d' % (math.ceil(n_in/tile_n_in)*math.ceil(h_in/tile_h_in)*math.ceil(w_in/tile_w_in))
+            y_no_str = '%d' % (math.ceil(n_out/tile_n_out)*math.ceil(h_out/tile_h_out)*math.ceil(w_out/tile_w_out))
+            W_no_str = '%d' % (math.ceil(n_out/tile_n_out)*math.ceil(n_in/tile_n_in))
+
+            print("  Conv2d tiling:")
+            print("    tiles:".ljust(15) + "x: " + x_tile_str.ljust(15) + "y: " + y_tile_str.ljust(15) + "W: " + W_tile_str.ljust(15)) 
+            print("    buffers:".ljust(15) + "x: " + x_size_str.ljust(15) + "y: " + y_size_str.ljust(15) + "W: " + W_size_str.ljust(15)) 
+            print("    no. tiles:".ljust(15) + "x: " + x_no_str.ljust(15) + "y: " + y_no_str.ljust(15) + "W: " + W_no_str.ljust(15)) 
+
             return (tile_n_in, tile_n_out, tile_h_in, tile_h_out, tile_w_in, tile_w_out)
+    print("  Conv2d ERROR: no tiling found")
+    return None
 
 def __get_tiling_linear(
     module,
@@ -265,17 +269,26 @@ def __get_tiling_linear(
             tile_n_in  = collector.Value(best_solution, tile_n_in )
             tile_n_out = collector.Value(best_solution, tile_n_out)
 
-            print("\ttiles:\t\tx[%d]\ty[%d]\tW[%dx%d]" % (
-                tile_n_in,
-                tile_n_out,
-                tile_n_out, tile_n_in,
-            ))
-            print("\tbuffers:\tx:%dB\t\ty:%dB\t\tW:%dB" % (
-                ds_x*tile_n_in,
-                ds_y*tile_n_out,
-                ds_W*tile_n_out*tile_n_in
-            ))
+            x_tile_str = '[%d]' % (tile_n_in)
+            y_tile_str = '[%d]' % (tile_n_out)
+            W_tile_str = '[%dx%d]' % (tile_n_out, tile_n_in)
+
+            x_size_str = "%.2f KiB" % (1./1024.*(ds_x*tile_n_in)) if ds_x*tile_n_in > 1024 else '%d B' % (ds_x*tile_n_in)
+            y_size_str = '%.2f KiB' % (1./1024.*(ds_y*tile_n_out)) if ds_y*tile_n_out > 1024 else '%d B' % (ds_y*tile_n_out)
+            W_size_str = '%.2f KiB' % (1./1024.*(ds_W*tile_n_out*tile_n_in)) if ds_W*tile_n_out*tile_n_in > 1024 else '%d B' % (ds_W*tile_n_out*tile_n_in)
+
+            x_no_str = '%d' % (math.ceil(n_in/tile_n_in))
+            y_no_str = '%d' % (math.ceil(n_out/tile_n_out))
+            W_no_str = '%d' % (math.ceil(n_out/tile_n_out)*math.ceil(n_in/tile_n_in))
+
+            print("  Linear tiling:")
+            print("    tiles:".ljust(15) + "x: " + x_tile_str.ljust(15) + "y: " + y_tile_str.ljust(15) + "W: " + W_tile_str.ljust(15)) 
+            print("    buffers:".ljust(15) + "x: " + x_size_str.ljust(15) + "y: " + y_size_str.ljust(15) + "W: " + W_size_str.ljust(15)) 
+            print("    no. tiles:".ljust(15) + "x: " + x_no_str.ljust(15) + "y: " + y_no_str.ljust(15) + "W: " + W_no_str.ljust(15)) 
+
             return (tile_n_in, tile_n_out)
+    print("  Linear ERROR: no tiling found")
+    return None
 
 def __get_tiling_pool2d(
     module,
@@ -359,13 +372,19 @@ def __get_tiling_pool2d(
         tile_h  = collector.Value(best_solution, tile_h )
         tile_w  = collector.Value(best_solution, tile_w )
 
-        print("\ttiles:\t\tx[%dx%dx%d]\ty[%dx%dx%d]" % (
-            tile_n, tile_h, tile_w,
-            tile_n, tile_h, tile_w
-        ))
-        print("\tbuffers:\tx:%dB\t\ty:%dB" % (
-            tile_n*tile_h*tile_w,
-            tile_n*tile_h*tile_w
-        ))
+        x_tile_str = '[%dx%dx%d]' % (tile_n, tile_h, tile_w)
+
+        x_size_str = "%.2f KiB" % (1./1024.*(ds_x*tile_n*tile_h*tile_w)) if ds_x*tile_n*tile_h*tile_w > 1024 else '%d B' % (ds_x*tile_n*tile_h*tile_w)
+        y_size_str = "%.2f KiB" % (1./1024.*(ds_y*tile_n*tile_h*tile_w)) if ds_y*tile_n*tile_h*tile_w > 1024 else '%d B' % (ds_y*tile_n*tile_h*tile_w)
+
+        x_no_str = '%d' % (math.ceil(n/tile_n)*math.ceil(h/tile_h)*math.ceil(w/tile_w))
+
+        print("  Pool2d tiling:")
+        print("    tiles:".ljust(15) + "x: " + x_tile_str.ljust(15) + "y: " + y_tile_str.ljust(15)) 
+        print("    buffers:".ljust(15) + "x: " + x_size_str.ljust(15) + "y: " + y_size_str.ljust(15)) 
+        print("    no. tiles:".ljust(15) + "x: " + x_no_str.ljust(15) + "y: " + y_no_str.ljust(15)) 
+
         return (tile_n, tile_h, tile_w)
+    print("  Pool2d ERROR: no tiling found")
+    return None
 

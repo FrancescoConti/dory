@@ -86,7 +86,7 @@ def __get_tiling_conv2d(
         min_tile_h_out = 1
 
     # this is to renormalize all costs
-    max_obj_value = buffer_size * cost_dim * 2
+    max_obj_value = buffer_size * cost_dim * 2 * 32
 
     for iteration in range(0,4):
 
@@ -149,18 +149,23 @@ def __get_tiling_conv2d(
             tile_w_in  = solver.IntVar(min_tile_w_in, w_in , 'tile_w_in' )
             tile_w_out = solver.IntVar(min_tile_w_out, w_out, 'tile_w_out')
 
+        # scaling is used to ensure datasize is integer
+        ds_x_scale = int(math.ceil(32*ds_x))
+        ds_y_scale = int(math.ceil(32*ds_y))
+        ds_W_scale = int(math.ceil(32*ds_W))
+
         # constraints
-        solver.Add(ds_x*tile_n_in*tile_h_in*tile_w_in + ds_y*tile_n_out*tile_h_out*tile_w_out + ds_W*tile_n_in*tile_n_out*fs*fs <= buffer_size)
+        solver.Add(ds_x_scale*tile_n_in*tile_h_in*tile_w_in + ds_y_scale*tile_n_out*tile_h_out*tile_w_out + ds_W_scale*tile_n_in*tile_n_out*fs*fs <= 32*buffer_size)
         solver.Add((2*tile_h_out + (fs-1) - 2*p) * s == 2*tile_h_in)
         solver.Add((2*tile_w_out + (fs-1) - 2*p) * s == 2*tile_w_in)
 
         # objective
         obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
-        solver.Add(obj_expr == cost_dim * (ds_x*tile_n_in*tile_h_in*tile_w_in + ds_y*tile_n_out*tile_h_out*tile_w_out + ds_W*tile_n_in*tile_n_out*fs*fs) 
-                             + cost_w   * tile_w_in
-                             + cost_h   * tile_h_in
-                             + cost_n   * tile_n_in
-                             + cost_feat_in * (tile_n_in - tile_n_out) )
+        solver.Add(obj_expr == cost_dim * (ds_x_scale*tile_n_in*tile_h_in*tile_w_in + ds_y_scale*tile_n_out*tile_h_out*tile_w_out + ds_W_scale*tile_n_in*tile_n_out*fs*fs) 
+                             + 32 * cost_w   * tile_w_in
+                             + 32 * cost_h   * tile_h_in
+                             + 32 * cost_n   * tile_n_in
+                             + 32 * cost_feat_in * (tile_n_in - tile_n_out) )
         objective = solver.Maximize(obj_expr, 1)
 
         decision_builder = solver.Phase([tile_n_in, tile_n_out, tile_h_in, tile_h_out, tile_w_in, tile_w_out],
@@ -234,7 +239,7 @@ def __get_tiling_linear(
         max_tile_n_in = n_in
 
     # this is to renormalize all costs
-    max_obj_value = buffer_size * cost_dim * 2
+    max_obj_value = buffer_size * cost_dim * 2 * 32
 
     for iteration in range(0,2):
 
@@ -248,13 +253,18 @@ def __get_tiling_linear(
             tile_n_in  = solver.IntVar(max_tile_n_in, max_tile_n_in , 'tile_n_in' )
             tile_n_out = solver.IntVar(1, max_tile_n_out, 'tile_n_out')
 
+        # scaling is used to ensure datasize is integer
+        ds_x_scale = int(math.ceil(32*ds_x))
+        ds_y_scale = int(math.ceil(32*ds_y))
+        ds_W_scale = int(math.ceil(32*ds_W))
+
         # constraints
-        solver.Add(ds_x*tile_n_in + ds_y*tile_n_out + ds_W*tile_n_in*tile_n_out <= buffer_size)
+        solver.Add(ds_x_scale*tile_n_in + ds_y_scale*tile_n_out + ds_W_scale*tile_n_in*tile_n_out <= 32*buffer_size)
 
         # objective
         obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
-        solver.Add(obj_expr == cost_dim * (ds_x*tile_n_in + ds_y*tile_n_out + ds_W*tile_n_in*tile_n_out) 
-                             + cost_n   * tile_n_in )
+        solver.Add(obj_expr == cost_dim * (ds_x_Scale*tile_n_in + ds_y_Scale*tile_n_out + ds_W_Scale*tile_n_in*tile_n_out) 
+                             + 32 * cost_n   * tile_n_in )
         objective = solver.Maximize(obj_expr, 1)
 
         decision_builder = solver.Phase([tile_n_in, tile_n_out],
@@ -340,7 +350,7 @@ def __get_tiling_pool2d(
         min_tile_h_out = 1
 
     # this is to renormalize all costs
-    max_obj_value = buffer_size * cost_dim * 2
+    max_obj_value = buffer_size * cost_dim * 2 * 32
 
     # integer positive variables.
     tile_n     = solver.IntVar(1, max_tile_n_in     , 'tile_n' )
@@ -349,17 +359,21 @@ def __get_tiling_pool2d(
     tile_h_out = solver.IntVar(min_tile_h_out, h_out , 'tile_h_out' )
     tile_w_out = solver.IntVar(min_tile_w_out, w_out , 'tile_w_out' )
 
+    # scaling is used to ensure datasize is integer
+    ds_x_scale = int(math.ceil(32*ds_x))
+    ds_y_scale = int(math.ceil(32*ds_y))
+
     # constraints
-    solver.Add(ds_x*tile_n*tile_h_in*tile_w_in + ds_y*tile_n*tile_h_out*tile_w_out <= buffer_size)
+    solver.Add(ds_x_scale*tile_n*tile_h_in*tile_w_in + ds_y_scale*tile_n*tile_h_out*tile_w_out <= 32*buffer_size)
     solver.Add(tile_h_in == s * tile_h_out)
     solver.Add(tile_w_in == s * tile_w_out)
 
     # objective
     obj_expr = solver.IntVar(0, max_obj_value, "obj_expr")
-    solver.Add(obj_expr == cost_dim * (ds_x*tile_n*tile_h_in*tile_w_in + ds_y*tile_n*tile_h_out*tile_w_out)
-                         + cost_w   * tile_w_in
-                         + cost_h   * tile_h_in
-                         + cost_n   * tile_n )
+    solver.Add(obj_expr == cost_dim * (ds_x_scale*tile_n*tile_h_in*tile_w_in + ds_y_scale*tile_n*tile_h_out*tile_w_out)
+                         + 32 * cost_w   * tile_w_in
+                         + 32 * cost_h   * tile_h_in
+                         + 32 * cost_n   * tile_n )
     objective = solver.Maximize(obj_expr, 1)
 
     decision_builder = solver.Phase([tile_n, tile_h_in, tile_w_in, tile_h_out, tile_w_out],

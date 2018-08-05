@@ -26,20 +26,19 @@ def get_tiling(
     elif type(module) is torch.nn.modules.linear.Linear:
         return __get_tiling_linear(module, x_shape, buffer_size, **kwargs)
     elif type(module) is torch.nn.modules.batchnorm.BatchNorm1d or type(module) is torch.nn.modules.batchnorm.BatchNorm2d:
-        print("\tINFO: ignoring batch normalization layer -- assumed to be merged with the previous Conv layer.")
+        print("    BatchNorm tiling: assumed to be merged with the previous Conv layer.")
         return None
     elif type(module) is torch.nn.modules.activation.ReLU:
-        print("\tINFO: ignoring ReLU -- assumed to be merged with the previous Conv layer.")
+        print("    ReLU tiling: assumed to be merged with the previous Conv layer.")
         return None
     elif type(module) is torch.nn.modules.dropout.Dropout:
-        print("\tINFO: ignoring dropout -- irrelevant in inference.")
+        print("    Dropout tiling: ignored, irrelevant in inference.")
         return None
     elif type(module) is torch.nn.modules.pooling.AvgPool2d or type(module) is torch.nn.modules.pooling.MaxPool2d:
         return __get_tiling_pool2d(module, x_shape, buffer_size, **kwargs)
     elif type(module) is torch.nn.modules.container.Sequential:
-        print("\tINFO: sequential is ignored -- use Dory_Sequential if you need a specialized container for merged implementation.")
+        print("    Sequential tiling: ignored, use Dory_Sequential if you need a specialized container for merged deployment (TODO).")
     else:
-        print("\tERROR: %s is not supported yet" % (type(module)))
         return None
 
 def __get_tiling_conv2d(
